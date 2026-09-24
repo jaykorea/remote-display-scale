@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QListWidget, QListWidgetItem, QTextEdit, QMessageBox, QFrame
@@ -13,11 +14,15 @@ from PyQt5.QtWidgets import (
 
 APP_DIR = Path.home() / ".config" / "cocelo-display-scale"
 STATE_FILE = APP_DIR / "original_state.json"
+ICON_FILE = Path(__file__).resolve().parent / "assets" / "cocelo-display-scale.png"
 
 CANDIDATE_RESOLUTIONS = [
-    "1280x720", "1366x768", "1600x900", "1920x1080",
-    "2560x1080", "2560x1440", "3440x1440", "3840x2160",
+    "1280x720", "1280x800", "1366x768", "1440x900", "1600x900",
+    "1680x1050", "1920x1080", "1920x1200", "2560x1080",
+    "2560x1440", "2560x1600", "2880x1800", "3440x1440",
+    "3840x2160", "3840x2400",
 ]
+SCALE_PRESETS = (100, 125, 150, 175, 200, 250, 300)
 
 
 def run_cmd(args):
@@ -106,6 +111,7 @@ class DisplayScaleApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("COCELO DISPLAY SETUP")
+        self.setWindowIcon(QIcon(str(ICON_FILE)))
         self.setMinimumWidth(700)
         self.setMinimumHeight(560)
         self.outputs = []
@@ -134,7 +140,7 @@ class DisplayScaleApp(QWidget):
         body.setSpacing(14)
         root.addLayout(body)
 
-        title = QLabel("Cocelo Display Scale Setup")
+        title = QLabel("Display Scale Setup")
         title.setObjectName("title")
         title.setAlignment(Qt.AlignRight)
         body.addWidget(title)
@@ -157,6 +163,19 @@ class DisplayScaleApp(QWidget):
         row_output.addWidget(output_label, 1)
         row_output.addWidget(self.output_combo, 2)
         body.addLayout(row_output)
+
+        row_scale = QHBoxLayout()
+        scale_label = QLabel("▶ Logical Scale")
+        scale_label.setObjectName("menuLabel")
+        self.scale_combo = QComboBox()
+        self.scale_combo.setMinimumHeight(34)
+        self.scale_combo.setToolTip(
+            "Logical size relative to the selected output mode. "
+            "200% doubles width and height; this is not desktop UI/text scaling."
+        )
+        row_scale.addWidget(scale_label, 1)
+        row_scale.addWidget(self.scale_combo, 2)
+        body.addLayout(row_scale)
 
         res_label = QLabel("Resolution Candidates")
         res_label.setObjectName("sectionLabel")
@@ -194,6 +213,9 @@ class DisplayScaleApp(QWidget):
         self.restore_btn.clicked.connect(self.restore_resolution)
         self.refresh_btn.clicked.connect(self.refresh)
         self.resolution_list.itemDoubleClicked.connect(lambda _: self.apply_selected_resolution())
+        self.output_combo.currentIndexChanged.connect(self.populate_resolution_candidates)
+        self.scale_combo.currentIndexChanged.connect(self.select_scale_preset)
+        self.resolution_list.currentItemChanged.connect(self.sync_scale_selection)
         self.refresh()
 
     def apply_bios_theme(self):
@@ -240,6 +262,8 @@ class DisplayScaleApp(QWidget):
             self.append_log(f"ERROR: {e}")
             return
 
+        previous_output = self.output_combo.currentData()
+        self.output_combo.blockSignals(True)
         self.output_combo.clear()
         connected = [o for o in self.outputs if o["connected"]]
         for o in connected:
@@ -249,32 +273,49 @@ class DisplayScaleApp(QWidget):
 
         default = pick_default_output(self.outputs)
         if default:
-            idx = self.output_combo.findData(default["name"])
+            idx = self.output_combo.findData(previous_output)
+            if idx < 0:
+                idx = self.output_combo.findData(default["name"])
             if idx >= 0:
                 self.output_combo.setCurrentIndex(idx)
+        self.output_combo.blockSignals(False)
 
         self.status.setText(f"Current framebuffer: {self.screen.get('current', 'unknown')}     Max framebuffer: {self.screen.get('maximum', 'unknown')}")
         self.populate_resolution_candidates()
         self.append_log("Display list refreshed." if connected else "ERROR: No connected display found.")
 
     def populate_resolution_candidates(self):
+        previous_resolution = self.selected_resolution()
+        previous_scale = self.scale_combo.currentData()
         current_fb = self.screen.get("current", "")
         max_fb = self.screen.get("maximum", "")
         max_pair = parse_resolution(max_fb)
         candidates = set(CANDIDATE_RESOLUTIONS)
-        for o in self.outputs:
-            if o["connected"]:
-                candidates.update(o["modes"])
-        if parse_resolution(current_fb):
-            candidates.add(current_fb)
+        output = self.selected_output()
+        mode_pair = parse_resolution(output["current_mode"]) if output else None
+        scale_resolutions = {}
+        if mode_pair:
+            for percent in SCALE_PRESETS:
+                w, h = (max(1, (value * percent + 50) // 100) for value in mode_pair)
+                if max_pair and (w > max_pair[0] or h > max_pair[1]):
+                    continue
+                scale_resolutions[f"{w}x{h}"] = percent
+        self.scale_combo.blockSignals(True)
+        self.scale_combo.clear()
+        self.scale_combo.addItem("Use resolution preset", None)
+        for res, percent in scale_resolutions.items():
+            self.scale_combo.addItem(f"{percent}%  [{res}]", res)
+        self.scale_combo.setEnabled(bool(scale_resolutions))
+        self.scale_combo.blockSignals(False)
 
         def sort_key(res):
             pair = parse_resolution(res)
             if not pair:
                 return (999999999, res)
             w, h = pair
-            return (w * h, w, h)
+            return (w, h)
 
+        self.resolution_list.blockSignals(True)
         self.resolution_list.clear()
         for res in sorted(candidates, key=sort_key):
             pair = parse_resolution(res)
@@ -288,15 +329,38 @@ class DisplayScaleApp(QWidget):
             label = f"  {res}"
             if res == current_fb:
                 label += "    * Current"
-            elif res in CANDIDATE_RESOLUTIONS:
-                label += "    Preset"
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, res)
             self.resolution_list.addItem(item)
-            if res == "3440x1440":
+            if res == previous_resolution:
                 self.resolution_list.setCurrentItem(item)
+        if self.resolution_list.currentItem() is None:
+            for index in range(self.resolution_list.count()):
+                item = self.resolution_list.item(index)
+                if item.data(Qt.UserRole) == current_fb:
+                    self.resolution_list.setCurrentItem(item)
+                    break
         if self.resolution_list.currentItem() is None and self.resolution_list.count() > 0:
             self.resolution_list.setCurrentRow(self.resolution_list.count() - 1)
+        self.resolution_list.blockSignals(False)
+        if previous_scale:
+            index = self.scale_combo.findData(previous_scale)
+            if index >= 0:
+                self.scale_combo.setCurrentIndex(index)
+
+    def select_scale_preset(self):
+        target = self.scale_combo.currentData()
+        if target:
+            self.resolution_list.blockSignals(True)
+            self.resolution_list.setCurrentRow(-1)
+            self.resolution_list.blockSignals(False)
+        elif self.resolution_list.currentItem() is None and self.resolution_list.count():
+            self.resolution_list.setCurrentRow(0)
+
+    def sync_scale_selection(self):
+        self.scale_combo.blockSignals(True)
+        self.scale_combo.setCurrentIndex(0)
+        self.scale_combo.blockSignals(False)
 
     def selected_output(self):
         name = self.output_combo.currentData()
@@ -306,6 +370,9 @@ class DisplayScaleApp(QWidget):
         return None
 
     def selected_resolution(self):
+        scale_target = self.scale_combo.currentData()
+        if scale_target:
+            return scale_target
         item = self.resolution_list.currentItem()
         return item.data(Qt.UserRole) if item else None
 
@@ -403,6 +470,7 @@ class DisplayScaleApp(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(str(ICON_FILE)))
     w = DisplayScaleApp()
     w.show()
     sys.exit(app.exec_())

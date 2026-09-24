@@ -1,0 +1,5 @@
+Generated using the built-in image_gen tool.
+
+Use case: logo-brand
+Asset type: Linux desktop application icon for Cocelo Display Scale, a BIOS-style remote display resolution utility.
+Primary request: create a single polished square app icon depicting a retro computer monitor with two opposing diagonal resize arrows inside its screen. Simple bold silhouette legible at 32 pixels, centered with generous padding. Style: crisp retro pixel-inspired geometric illustration, subtle bevels, cobalt blue screen, silver gray monitor chassis, white arrows, matching classic BIOS colors. Transparent background, no text, no letters, no watermark, no extra objects. Deliver PNG icon.

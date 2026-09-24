@@ -10,8 +10,10 @@ RustDesk 원격 접속 환경에서 화면 해상도와 논리적 framebuffer �
 * `xrandr` 기반 해상도 및 framebuffer 변경
 * RustDesk 원격 화면 크기 확장
 * BIOS 스타일의 간단한 사용자 인터페이스
-* 지원 해상도 자동 조회
+* 최대 framebuffer 크기에 맞춰 프리셋 필터링
 * 지정된 해상도 프리셋 제공
+* 100·125·150·175·200·250·300% 논리 화면 배율 프리셋
+* 앱 창과 바탕화면 실행 아이콘 제공
 * 디스플레이 기본 해상도 복원
 * 키보드 단축키 지원
 * 실행 명령 및 오류 로그 표시
@@ -21,15 +23,28 @@ RustDesk 원격 접속 환경에서 화면 해상도와 논리적 framebuffer �
 다음 해상도가 기본 프리셋으로 제공됩니다.
 
 * 1280×720
+* 1280×800
 * 1366×768
+* 1440×900
 * 1600×900
+* 1680×1050
 * 1920×1080
+* 1920×1200
 * 2560×1080
 * 2560×1440
+* 2560×1600
+* 2880×1800
 * 3440×1440
 * 3840×2160
+* 3840×2400
 
-연결된 디스플레이가 지원하는 해상도도 자동으로 목록에 추가됩니다.
+`Resolution Candidates`에는 기본 해상도 프리셋만 표시합니다. 배율로 계산된 해상도와 디스플레이의 추가 모드는 목록에 넣지 않으며, 퍼센트는 `Logical Scale`에서만 표시합니다.
+
+`Logical Scale`에서 100·125·150·175·200·250·300%를 선택하면 현재 선택한 출력 모드를 기준으로 가로·세로 크기를 계산합니다. 예를 들어 `1920×1200` 출력에서 150%는 `2880×1800`입니다. 소수 픽셀은 반올림하며, 최대 framebuffer 크기를 초과하는 해상도와 배율은 목록에서 제외합니다.
+
+이 배율은 논리 화면 크기의 비율입니다. OS의 글자/UI 확대 배율과 달리, 값이 커질수록 더 넓은 작업 공간을 실제 모니터 크기에 맞춰 표시합니다. 배율 선택 후 `Apply Selected`를 눌러 적용합니다.
+
+해상도 프리셋과 배율 중 마지막으로 선택한 값을 적용합니다. 해상도 목록에서 항목을 선택하면 `Logical Scale`은 `Use resolution preset`으로 돌아갑니다.
 
 ## 동작 방식
 
@@ -136,11 +151,19 @@ Conda의 `base` 환경에서 실행하려면 다음 명령을 사용할 수 있�
 conda run -n base python display_scale_app.py
 ```
 
+바탕화면 실행 아이콘을 설치하거나 기존 설치를 업데이트하려면 다음을 실행합니다.
+
+```bash
+./install.sh
+```
+
+앱과 아이콘을 `~/.local/share/cocelo-display-scale/`에 복사하고 바탕화면 실행 파일을 생성합니다.
+
 ## 사용 방법
 
 1. 프로그램을 실행합니다.
 2. `Display Output`에서 적용할 디스플레이를 선택합니다.
-3. `Resolution Candidates`에서 원하는 해상도를 선택합니다.
+3. `Resolution Candidates`에서 원하는 해상도를 선택하거나 `Logical Scale`에서 배율을 선택합니다.
 4. `Apply Selected` 버튼을 누릅니다.
 5. RustDesk에서 변경된 화면이 반영되지 않으면 원격 연결을 다시 접속합니다.
 6. 기본 디스플레이 해상도로 돌아가려면 `Restore Original` 버튼을 누릅니다.
@@ -290,7 +313,11 @@ Ubuntu on Xorg
 ```text
 remote-display-scale/
 ├── display_scale_app.py
-├── README.md
+├── install.sh
+├── readme.md
+├── assets/
+│   ├── cocelo-display-scale.png
+│   └── icon-prompt.txt
 └── figures/
     └── image.png
 ```
