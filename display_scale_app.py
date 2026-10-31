@@ -292,9 +292,13 @@ class DisplayScaleApp(QWidget):
         max_pair = parse_resolution(max_fb)
         candidates = set(CANDIDATE_RESOLUTIONS)
         output = self.selected_output()
+        # Legacy RandR exposes "default" without CRTC transform support.
+        legacy_output = output and output["name"] == "default"
+        if legacy_output:
+            candidates = set(output["modes"])
         mode_pair = parse_resolution(output["current_mode"]) if output else None
         scale_resolutions = {}
-        if mode_pair:
+        if mode_pair and not legacy_output:
             for percent in SCALE_PRESETS:
                 w, h = (max(1, (value * percent + 50) // 100) for value in mode_pair)
                 if max_pair and (w > max_pair[0] or h > max_pair[1]):
@@ -306,6 +310,11 @@ class DisplayScaleApp(QWidget):
         for res, percent in scale_resolutions.items():
             self.scale_combo.addItem(f"{percent}%  [{res}]", res)
         self.scale_combo.setEnabled(bool(scale_resolutions))
+        self.scale_combo.setToolTip(
+            "This legacy output supports registered resolutions only."
+            if legacy_output else
+            "Logical size relative to the selected output mode; not desktop UI/text scaling."
+        )
         self.scale_combo.blockSignals(False)
 
         def sort_key(res):
@@ -389,9 +398,14 @@ class DisplayScaleApp(QWidget):
         if not mode:
             QMessageBox.warning(self, "No mode", f"Cannot detect current mode for {output['name']}.")
             return
+        if output["name"] == "default" and target not in output["modes"]:
+            QMessageBox.warning(self, "Unsupported resolution", "Select a registered display mode, or refresh the display list.")
+            return
         fb = self.screen.get("current") or mode
         save_original_state(output["name"], mode, fb)
         cmd = ["xrandr", "--fb", target, "--output", output["name"], "--mode", mode, "--scale-from", target, "--pos", "0x0"]
+        if output["name"] == "default":
+            cmd = ["xrandr", "--size", target]
         self.append_log("$ " + " ".join(cmd))
         rc, out, err = run_cmd(cmd)
         if out.strip():
@@ -402,7 +416,7 @@ class DisplayScaleApp(QWidget):
             QMessageBox.critical(self, "Apply failed", err.strip() or "xrandr failed")
             return
         self.refresh()
-        QMessageBox.information(self, "Applied", f"Logical resolution set to {target} on {output['name']}.\nRustDesk may need reconnecting to capture the new size.")
+        QMessageBox.information(self, "Applied", f"Resolution set to {target} on {output['name']}.\nRustDesk may need reconnecting to capture the new size.")
 
     def restore_resolution(self):
         # 저장된 이전 상태가 아니라 HD-0의 기본(preferred/native) 해상도로 복원한다.
@@ -448,6 +462,8 @@ class DisplayScaleApp(QWidget):
             ],
             ["xrandr", "--fb", mode],
         ]
+        if output["name"] == "default":
+            commands = [["xrandr", "--size", mode]]
 
         for cmd in commands:
             self.append_log("$ " + " ".join(cmd))

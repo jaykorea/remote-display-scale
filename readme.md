@@ -40,6 +40,8 @@ RustDesk 원격 접속 환경에서 화면 해상도와 논리적 framebuffer �
 
 `Resolution Candidates`에는 기본 해상도 프리셋만 표시합니다. 배율로 계산된 해상도와 디스플레이의 추가 모드는 목록에 넣지 않으며, 퍼센트는 `Logical Scale`에서만 표시합니다.
 
+단, 구형 RandR의 `default` 출력에서는 Xorg가 실제 제공하는 해상도 모드만 표시하고 `Logical Scale`을 비활성화합니다. 이 출력은 `xrandr --size`로 화면 모드를 직접 변경하며, Restore도 같은 방식으로 기본 모드를 적용합니다. 원하는 해상도가 없다면 Xorg 설정에 모드를 등록하고 Xorg 재시작 후 `Refresh`로 다시 조회해야 합니다.
+
 `Logical Scale`에서 100·125·150·175·200·250·300%를 선택하면 현재 선택한 출력 모드를 기준으로 가로·세로 크기를 계산합니다. 예를 들어 `1920×1200` 출력에서 150%는 `2880×1800`입니다. 소수 픽셀은 반올림하며, 최대 framebuffer 크기를 초과하는 해상도와 배율은 목록에서 제외합니다.
 
 이 배율은 논리 화면 크기의 비율입니다. OS의 글자/UI 확대 배율과 달리, 값이 커질수록 더 넓은 작업 공간을 실제 모니터 크기에 맞춰 표시합니다. 배율 선택 후 `Apply Selected`를 눌러 적용합니다.
@@ -234,6 +236,10 @@ Virtual-1
 ```
 
 ## 문제 해결
+
+### `RRSetCrtcTransform` / `BadValue` 오류
+
+`default` 출력의 구형 dummy 드라이버는 `--scale-from` 변환을 지원하지 않을 수 있습니다. 최신 앱은 이 출력에서 변환 대신 등록된 해상도로 직접 전환합니다. 기존 설치를 사용 중이면 `./install.sh`로 업데이트하고 앱을 닫았다가 다시 실행하세요. `Failed to get size of gamma` 경고와 별개로, `RRSetCrtcTransform` 오류는 화면 변환 요청이 거부됐다는 뜻입니다.
 
 ### `xrandr: command not found`
 
