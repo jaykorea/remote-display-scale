@@ -54,6 +54,7 @@ class DisplayScaleTests(unittest.TestCase):
         modes = {self.window.resolution_list.item(i).data(Qt.UserRole)
                  for i in range(self.window.resolution_list.count())}
         self.assertIn("2880x1800", modes)
+        self.assertIn("3677x1440", modes)
         self.assertTrue(self.window.scale_combo.isEnabled())
 
     def test_legacy_apply_rejects_unregistered_mode(self):
